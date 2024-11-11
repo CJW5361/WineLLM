@@ -50,9 +50,7 @@
 
 ### Frontend
 - React
-- Material-UI
-- TypeScript
-
+- JavaScript
 ## 시스템 아키텍처 📐
 
 ### RAG (Retrieval Augmented Generation) 시스템
