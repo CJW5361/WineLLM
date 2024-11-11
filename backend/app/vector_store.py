@@ -6,7 +6,9 @@ from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
 import logging
 import os
-from .config import get_settings
+from app.config import get_settings
+import json
+from chromadb.config import Settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -30,7 +32,7 @@ def load_wine_data():
                 csv_path = alternative_path
             else:
                 raise FileNotFoundError(f"CSV file not found at: {csv_path} or {alternative_path}")
-            
+        
         df = pd.read_csv(csv_path)
         logger.info(f"Successfully loaded {len(df)} wine records from {csv_path}")
         return df
@@ -75,7 +77,6 @@ def create_wine_documents(df):
             아로마: {aroma}
             음식 페어링: {food_matching}
             """
-
             metadata = {
                 "name_ko": name_ko,
                 "name_en": name_en,
@@ -93,44 +94,37 @@ def create_wine_documents(df):
                 "image_url": image_url,
                 "detail_url": detail_url
             }
-            
             documents.append(Document(page_content=content, metadata=metadata))
-            if idx % 100 == 0:
-                logger.info(f"Processed {idx} documents")
-            
         except Exception as e:
-            logger.error(f"Error processing wine row {idx}: {e}")
+            logger.error(f"Error creating document for row {idx}: {e}")
             continue
-    
-    logger.info(f"Created {len(documents)} wine documents")
     return documents
 
-def get_vector_store():
+async def get_vector_store():
     try:
-        # 벡터 스토어 경로 설정
         current_dir = Path(__file__).parent.parent
         persist_directory = current_dir / "data" / "vector_store"
         
-        # OpenAI API 키 설정 확인
         if not settings.openai_api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables")
-            
+        
         embeddings = OpenAIEmbeddings(openai_api_key=settings.openai_api_key)
         
-        # 기존 벡터 스토어가 있는지 확인
         if persist_directory.exists():
             logger.info(f"Found existing vector store at {persist_directory}")
-            vector_store = Chroma(persist_directory=str(persist_directory), embedding_function=embeddings)
+            vector_store = Chroma(
+                persist_directory=str(persist_directory), 
+                embedding_function=embeddings
+            )
             return vector_store
         
-        # 새로운 벡터 스토어 생성
         logger.info("Creating new vector store...")
         df = load_wine_data()
         documents = create_wine_documents(df)
         
         if not documents:
             raise ValueError("No documents created from wine data")
-            
+        
         vector_store = Chroma.from_documents(
             documents=documents,
             embedding=embeddings,
